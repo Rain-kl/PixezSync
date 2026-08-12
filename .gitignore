@@ -60,3 +60,4 @@ s3_cache
 /.cache/
 /internal/router/root/dist/
 .dmux/
+.superpowers/

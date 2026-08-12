@@ -1,23 +1,73 @@
 # AGENTS.md — 项目AI助手工作操作手册
 
-本文件面向 AI 开发助手，定义其职责与操作规范。
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-## Git 提交规范指南
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
-### 提交信息基本格式
+## 1. Think Before Coding
 
-每次提交更改时，应当使用以下提交格式:
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
 
-```text
-<type>(<scope>): <subject>
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
 
-<body>
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
 ```
 
-* **Type**: 提交类型（例如 `feat`, `fix`, `refactor`, `perf`, `docs`, `chore` 等）。
-* **Scope** (可选): 影响的范围（例如 `api`, `frontend`, `auth`, `mcp` 等）。
-* **Subject**: 简短的一句话描述变更。
-* **Body** (可选): 详细的说明，多行叙述。
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+
+## Git 提交规范
+
+遵循 Conventional Commits：`<type>(<scope>): <subject>`（例：`feat(auth): support email login`）。
 
 ## 务必阅读匹配的 Skill
 
@@ -27,7 +77,6 @@
 | `new-async-task` | 添加或修改 Asynq 任务、定时任务、TaskHandler、任务元数据 |
 | `new-setting` | 添加或修改系统/业务/公开设置、`/admin/system` 参数或 `/admin/settings` 图形化设置 |
 | `database-migration` | 数据库表结构变更、goose SQL 迁移（PG/SQLite/ClickHouse）、seed 数据 |
-| `clickhouse-batchwriter` | ClickHouse 批量写入、`internal/db/batchwriter` 接入、分析表异步 flush、背压与写入路径改造 |
 | `file-upload` | 业务上传文件、Worker 程序化摄取、`upload.Ingest` 策略选型、文件访问与 `w_uploads` / 统计排查 |
 | `cache-framework` | 新增或修改业务缓存（RAM/Redis/DB 三层读路径）、缓存失效、多节点 pub/sub 同步、评估高频读是否应接入缓存 |
 | `push-notification` | 系统通知推送事件、统一触发器投递、带消息推送的业务功能 |
@@ -58,67 +107,6 @@
 
 - 后端：Go 1.25+、Gin、GORM、PostgreSQL、可选 ClickHouse、Redis、Asynq、Cobra、Viper、Swaggo、OpenTelemetry、Zap、AWS SDK v2、Snowflake IDs。
 - 前端：Next.js App Router、TypeScript、Tailwind CSS、pnpm、shadcn/ui。
-
-### 目录结构与平台能力
-
-顶层目录：
-
-- `main.go`：程序入口，委派给 `internal/cmd`。
-- `config.example.yaml`：已提交的配置模板。在添加配置字段时保持更新。
-- `config.yaml`：本地运行时的配置文件。不要将其作为已提交的源码提交。
-- `docker/`：集成的、仅前端的和仅后端的 Dockerfile。
-- `docs/`：自动生成的 Swagger 文档。请勿手动编辑生成的文件。
-- `frontend/`：Next.js 应用。
-- `internal/`：私有 Go 后端代码。
-- `pkg/`：公共 Go 库/工具包（留作扩展或存放不依赖特定业务的通用代码）。
-- `scripts/`：本地和 CI 辅助脚本。
-- `support-files/`：部署 and 数据库辅助文件。
-- `bin/`：本地编译生成的二进制可执行文件。
-- `data/`：本地运行时数据文件目录（如 PostgreSQL、Redis 数据等）。
-- `uploads/`：本地文件上传存储目录。
-
-后端目录：
-
-- `internal/cmd/`：用于 API、worker、scheduler、root init 的 Cobra 命令。进程启动时在此调用 `bootstrap.Register*` 与 `bootstrap.Init`，再启动 router / worker / scheduler。
-- `internal/bootstrap/`：应用装配根（composition root）。集中注册任务 Handler、推送域事件订阅、任务完成监听器，并执行 `SyncEvents`、ClickHouse 访问日志写入等进程级初始化；所有注册函数使用 `sync.Once` 保证幂等。
-- `internal/config/`：Viper 加载和配置结构体。运行时代码应使用 `config.Config.<Section>.<Field>`。
-- `internal/router/`：唯一的 HTTP 路由注册点。
-- `internal/apps/`：按功能（Feature-based）组织的 HTTP Handler、中间件、内部服务与模块逻辑。移除全局 service 层，模块内部业务逻辑（如验证码业务逻辑管理器 `internal/apps/cap/manager.go`）均收敛于各自模块中；管理端模块位于 `internal/apps/admin/`。
-- `internal/apps/upload/`：上传记录、文件访问控制、本地/S3 文件响应、下载及图片 WebP 压缩。业务应复用 `upload.Ingest` / `upload.Remove` 与 `GET /f/:id` 文件服务，不直接操作底层 storage 或旁路写 `w_uploads`。
-- `internal/model/`：GORM 实体和模型级业务方法。
-- `internal/db/`：PostgreSQL、Redis、ClickHouse、GORM 日志、ID 生成和 goose SQL 迁移的布线。
-- `internal/diskcache/`：平台级磁盘字节缓存，通过 `diskcache.GetGlobalCache()` 提供 TTL、最大空间限制、LRU 淘汰、清空、状态统计和配置热更新。写入时使用 `DefaultExpiration`（全局默认 TTL）、正数 `time.Duration`（业务 TTL）或 `NoExpiration`（无 TTL，仍受空间限制和 LRU 淘汰）。
-- `internal/storage/`：S3 兼容对象存储适配，提供对象上传、读取、删除、CDN/代理读取及远端对象本地缓存。
-- `internal/task/`：Asynq 任务框架；参见 `new-async-task` 了解变更。
-- `internal/common/`：共享的通用模型及响应（如 `internal/common/response`）、绑定（bind）、常量以及通用错误。
-- `internal/util/`：纯底层工具包，无任何 HTTP/数据库框架依赖。
-- `internal/listener/`：域事件分发层。核心域（auth、user 等）在此定义并发射事件（如 `EmitAdminLoggedIn`）；运维模块（push、webhook 等）在 bootstrap 阶段订阅，实现跨模块解耦。
-- `internal/otel_trace/`：链路追踪（tracing）助手。
-- `internal/testhelper/`：后端测试共享辅助能力。
-- `internal/buildinfo/`：暴露在发布/构建工作流中注入的元数据（如版本号、编译时间等）。
-
-公共底层包 (`pkg/`)：
-- `pkg/cache/disk/`：纯底层的通用本地磁盘缓存引擎。
-- `pkg/cap/`：底层的通用验证码验证和生成库。
-- `pkg/httppool/`：管理全局共享且经过优化的 HTTP 传输客户端及连接池，集成 OTel 链路追踪。
-- `pkg/logger/`：Zap 和 OTel 日志助手。
-- `pkg/push/`：推送渠道客户端集成（Lark/Telegram/Email）。
-- `pkg/mail/`：邮件发送客户端。
-- `pkg/trace/`：OpenTelemetry 链路追踪配置。
-- `pkg/util/`：纯底层无副作用的系统工具（Crypto/Password/UUID）。
-
-前端目录：
-
-- `frontend/app/`：App Router 页面、路由组、根布局、全局配置。
-- `frontend/components/ui/`：shadcn/ui 基础组件。
-- `frontend/components/common/`：跨页面的业务组件。
-- `frontend/components/layout/`：Header、Sidebar、Footer 等应用布局组件。
-- `frontend/components/auth/`、`home/`、`animate-ui/`、`providers/`：特定作用域的 UI 组件。
-- `frontend/lib/services/`：基于 `BaseService` 的类型化 API 服务，按业务域拆分并由 `services` 对象统一导出。
-- `frontend/contexts/`、`hooks/`、`lib/`、`types/`、`public/`：共享状态、Hook、客户端与实用工具、TypeScript 类型、静态资产。
-- `frontend/scripts/`：前端构建和维护脚本。
-- `frontend/.next/`、`frontend/out/`、`frontend/node_modules/`：本地生成或安装的产物，不作为业务源码编辑。
-
 
 ## 开发要求
 
@@ -174,18 +162,8 @@ c.JSON(http.StatusOK, response.OKNil())
 
 统一通过 `internal/common/response` 的 **Abort 系列函数**中断请求。这些函数会将 `*response.APIError` 挂载到 Gin 的 `c.Errors` 链并 `c.Abort()`；请求结束后由全局 `response.ErrorHandlerMiddleware()`（在 `internal/router/middlewares.go` 中注册）统一写出 JSON，并记录到 OpenTelemetry Trace/Jaeger。
 
-**推荐使用的便捷函数（优先于手写状态码）：**
-
-| 函数 | HTTP 状态码 | 典型场景 |
-|------|-------------|----------|
-| `response.AbortBadRequest(c, msg)` | 400 | 参数绑定失败、字段校验、业务规则拒绝（如密码错误、重复注册） |
-| `response.AbortUnauthorized(c, msg)` | 401 | 未登录、Session/Token 失效（`oauth.LoginRequired()`） |
-| `response.AbortForbidden(c, msg)` | 403 | 已登录但无权访问（如 Token 不允许访问的端点） |
-| `response.AbortNotFound(c, msg)` | 404 | 资源不存在；管理员中间件对非管理员隐藏端点时也使用此码 |
-| `response.AbortConflict(c, msg)` | 409 | 资源冲突（如唯一键重复） |
-| `response.AbortTooManyRequests(c, msg)` | 429 | 限流、频率限制 |
-| `response.AbortInternal(c, msg)` | 500 | 对用户返回通用提示；底层错误须先记录日志 |
-| `response.AbortWithError(c, code, msg)` | 自定义 | 上表未覆盖的状态码时使用 |
+- **Logics 分工**：`logics.go` 只接受 `context.Context`，返回 `(result, error)`，严禁依赖 `*gin.Context` 或调用 `c.JSON`/`Abort*`。
+- **错误日志**：底层错误在 Handler/Logic 边界用 `pkg/logger` 打印日志，禁止使用 `_ = ...` 静默吞掉关键错误。
 
 **标准 Handler 模板：**
 

@@ -73,7 +73,7 @@ PixEz Flutter 是使用 Flutter 编写的 pixiv 第三方客户端，面向 Andr
 │   ├── README_en.md
 │   └── README_id.md
 ├── .vscode/
-├── .agent/
+├── .agents/
 ├── android/
 ├── ios/
 ├── macos/
